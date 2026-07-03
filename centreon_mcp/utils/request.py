@@ -1,4 +1,6 @@
 import json
+import os
+import ssl
 from copy import deepcopy
 
 import httpx
@@ -7,6 +9,48 @@ from httpx import AsyncClient
 
 from centreon_mcp import CREDENTIALS
 from centreon_mcp.utils import logger
+
+
+def _as_bool(value: str | bool) -> bool:
+    """
+    Convert environment-style boolean strings to bool.
+    """
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _build_tls_verify() -> bool | str | ssl.SSLContext:
+    """
+    Build HTTPX TLS verify setting from environment credentials.
+    """
+    if _as_bool(CREDENTIALS.get("CENTREON_TLS_INSECURE", "false")):
+        logger.warning(
+            "CENTREON_TLS_INSECURE is enabled: TLS certificate verification is disabled."
+        )
+        return False
+
+    ca_bundle = str(CREDENTIALS.get("CENTREON_CA_BUNDLE", "")).strip()
+    if ca_bundle:
+        if os.path.isfile(ca_bundle):
+            return ca_bundle
+        logger.warning(
+            f"Ignoring CENTREON_CA_BUNDLE='{ca_bundle}': file does not exist. "
+            "Falling back to system/default CA trust."
+        )
+
+    if _as_bool(CREDENTIALS.get("CENTREON_USE_SYSTEM_CA_STORE", "true")):
+        try:
+            import truststore  # type: ignore[import-untyped]
+
+            return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        except ImportError:
+            logger.warning(
+                "CENTREON_USE_SYSTEM_CA_STORE is enabled but truststore is not installed. "
+                "Falling back to default CA bundle."
+            )
+
+    return True
 
 
 def hide(headers: dict | None) -> dict | None:
@@ -55,7 +99,7 @@ async def request(
     """
     # Build request arguments
     base = CREDENTIALS["CENTREON_BASE_URL"]
-    token = get_http_headers().get("centreon-api-token")
+    token = get_http_headers().get("centreon-api-token") or CREDENTIALS.get("CENTREON_API_TOKEN")
     url = f"{base}/api/latest/{endpoint}"
     headers = {"X-AUTH-TOKEN": token} if token else None
     params = params or {}
@@ -69,7 +113,8 @@ async def request(
         f"Payload: {json.dumps(payload, indent=2)}"
     )
     try:
-        async with AsyncClient() as client:
+        verify: bool | str | ssl.SSLContext = _build_tls_verify()
+        async with AsyncClient(verify=verify) as client:
             response = await client.request(
                 method, url, headers=headers, json=payload, params=params
             )
