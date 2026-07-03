@@ -102,8 +102,12 @@ cd centreon-mcp
 | Name                     | Default | Description                                           |
 | ------------------------ | ------- | ----------------------------------------------------- |
 | `CENTREON_BASE_URL`      |         | Base URL of the Centreon instance.                    |
+| `CENTREON_API_TOKEN`     |         | Centreon API token used when `centreon-api-token` header is not provided (useful for stdio/local runs). |
 | `CENTREON_MCP_PORT`      | `8000`  | Port used to start the Centreon MCP service.          |
 | `CENTREON_MCP_LOG_LEVEL` | `INFO`  | Minimal severity level for Centreon MCP service logs. |
+| `CENTREON_USE_SYSTEM_CA_STORE` | `true` | Use the operating system CA trust store for TLS validation. |
+| `CENTREON_CA_BUNDLE`     |         | Path to a custom CA bundle file (`.pem`) used for TLS validation. |
+| `CENTREON_TLS_INSECURE`  | `false` | Disable TLS certificate validation (not recommended, for testing only). |
 
 ### Using UV
 
